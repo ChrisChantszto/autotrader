@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useParams } from "react-router-dom";
+import { BrowserRouter as Router, Routes, useLocation, Route, Link, useParams } from "react-router-dom";
 import SellCar from "./sellCar";
 import SavedPage from "./savedPage";
 import { auth, signInWithPopup, GoogleAuthProvider, FacebookAuthProvider, OAuthProvider } from "./firebase";
 import { motion } from "framer-motion";
+import UsedCars from "./used-cars";
+import CarDetails from "./carDetails";
 import { Heart, LogIn, Save } from "lucide-react"; // Importing icons from lucide-react
 import { FaFacebook, FaGoogle, FaApple } from "react-icons/fa"; // Importing social media icons
 import SignUpPage from "./SignUpPage";
 import { onAuthStateChanged } from "firebase/auth";
+import HeaderNavigation from "./headerNavigation";
 
 
 // Mock Data for Used Cars
@@ -127,45 +130,44 @@ function AutoTraderApp() {
     <Router>
       <div className="min-h-screen bg-gray-100">
         {/* Header with Navigation */}
-        {/* Header */}
-        <header className="bg-blue-600 text-white">
+        <header className="bg-white text-gray-800 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 py-2">
+            <HeaderNavigation />
+          </div>
+
+
+          {/* Second Row: Logo and Main Navigation */}
           <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-4">
-            <div className="flex items-center space-x-6">
-              <Link to="/" className="text-3xl font-bold">
-                AutoRoll
-              </Link>
-              <nav className="space-x-6 text-lg font-semibold">
-                <Link to="/used-cars" className="hover:text-gray-200">
-                  Used Cars
-                </Link>
-                <Link to="/sell-car" className="hover:text-gray-200">
-                  Sell Your Car
-                </Link>
-              </nav>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link to="/saved" className="hover:text-gray-200">
-                <Heart className="w-6 h-6" />
-              </Link>
-              {user ? (
-                <div className="flex items-center space-x-4">
-                  <span className="text-white">Hi, {user.displayName}</span>
-                  <button
-                    onClick={handleLogout}
-                    className="px-4 py-2 text-white bg-red-600 rounded-md hover:bg-red-700"
-                  >
-                    Log Out
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={toggleLogin}
-                  className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none flex items-center"
-                >
-                  <LogIn className="w-6 h-6" />
-                  <span className="ml-2">Sign In</span>
-                </button>
-              )}
+            <Navigation />
+            
+           {/* User Actions */}
+  <div className="flex items-center space-x-6">
+    {/* Saved Icon with Label */}
+    <Link to="/saved" className="flex flex-col items-center text-black-600 hover:text-blue-800">
+      <Heart className="w-6 h-6" />
+      <span className="text-xs font-medium mt-1">Saved</span>
+    </Link>
+
+    {user ? (
+      <div className="flex items-center space-x-4">
+        <span className="text-gray-700">Hi, {user.displayName}</span>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 text-white bg-red-600 rounded-md hover:bg-red-700"
+        >
+          Log Out
+        </button>
+      </div>
+    ) : (
+      // Sign In Icon with Label
+      <button
+        onClick={toggleLogin}
+        className="flex flex-col items-center text-black-600 hover:text-blue-800"
+      >
+        <LogIn className="w-6 h-6" />
+        <span className="text-xs font-medium mt-1">Sign In</span>
+      </button>
+    )}
             </div>
           </div>
         </header>
@@ -173,8 +175,8 @@ function AutoTraderApp() {
         {/* App Routes */}
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/used-cars" element={<UsedCarsList />} />
-          <Route path="/used-cars/:carId" element={<CarDetails />} />
+          <Route path="/used-cars" element={<UsedCars />} />
+          <Route path="/used-cars/:id" element={<CarDetails />} />
           <Route path="/sell-car" element={<SellCar />} />
           <Route path="/saved" element={<SavedPage />} />
           <Route path="/sign-up" element={<SignUpPage />} />
@@ -258,6 +260,58 @@ function AutoTraderApp() {
   );
 }
 
+function Navigation() {
+  const location = useLocation();
+  const [hoveredLink, setHoveredLink] = useState(null);
+
+  const navLinks = [
+    { path: "/used-cars", label: "Used Cars" },
+    { path: "/sell-car", label: "Sell Your Car" },
+  ];
+
+  return (
+    <div className="flex items-baseline">
+      {/* Logo */}
+      <Link to="/" className="text-3xl font-bold">
+        <img src="/Logo(150).png" alt="AutoRoll logo" className="h-11" />
+      </Link>
+
+      {/* Navigation Links */}
+      <nav className="flex space-x-6 text-md font-medium ml-8 relative">
+        {navLinks.map((link, index) => (
+          <div
+            key={index}
+            className="relative"
+            onMouseEnter={() => setHoveredLink(link.path)}
+            onMouseLeave={() => setHoveredLink(null)}
+          >
+            <Link
+              to={link.path}
+              className={`relative ${
+                location.pathname === link.path
+                  ? "font-semibold text-black"
+                  : "text-black"
+              } ${
+                hoveredLink && hoveredLink !== link.path ? "opacity-60" : "opacity-100"
+              } hover:opacity-100`}
+            >
+              {link.label}
+            </Link>
+            {/* Red Underline for Active Link */}
+            {location.pathname === link.path && (
+              <motion.div
+                layoutId="underline"
+                className="absolute bottom-[-16px] left-[-10px] w-[calc(100%+20px)] h-[2px] bg-red-600"
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              />
+            )}
+          </div>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 // Home Page Component
 function HomePage() {
   return (
@@ -308,43 +362,6 @@ function UsedCarsList() {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-// Car Details Component
-function CarDetails() {
-  const { carId } = useParams();
-  const car = carData.find((c) => c.id === parseInt(carId));
-
-  if (!car) {
-    return <p className="text-center mt-8 text-gray-500">Car not found.</p>;
-  }
-
-  return (
-    <div className="max-w-7xl mx-auto mt-8 flex space-x-6">
-      {/* Car Images */}
-      <div className="w-1/2">
-        {car.images.map((image, index) => (
-          <img
-            key={index}
-            src={image}
-            alt={`${car.make} ${car.model}`}
-            className="w-full h-60 object-cover rounded-lg mb-4"
-          />
-        ))}
-      </div>
-
-      {/* Car Details */}
-      <div className="w-1/2">
-        <h2 className="text-2xl font-bold">
-          {car.year} {car.make} {car.model}
-        </h2>
-        <p className="text-gray-600 text-lg">{car.price}</p>
-        <p className="text-gray-500">{car.mileage}</p>
-        <p className="text-gray-500 mb-4">{car.location}</p>
-        <p className="text-gray-700">{car.description}</p>
-      </div>
     </div>
   );
 }
