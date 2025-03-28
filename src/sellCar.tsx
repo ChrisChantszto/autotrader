@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import SellCarCarousel from './sellCarCarousel';
 import { motion, AnimatePresence } from 'framer-motion';
+import CarTypeDropdown from './carTypeDropDown';
 
 function SellCar() {
   const [showForm, setShowForm] = useState(false);
@@ -568,7 +569,7 @@ function SellCar() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="previousOwners" className="block mb-2">
+                        {/* <label htmlFor="previousOwners" className="block mb-2">
                           車身類型
                         </label>
                         <input 
@@ -578,7 +579,8 @@ function SellCar() {
                           min="0"
                           placeholder="輸入數目"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        /> */}
+                        <CarTypeDropdown />
                       </div>
                     </div>
                     
