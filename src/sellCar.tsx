@@ -5,12 +5,58 @@ import CarTypeDropdown from './carTypeDropDown';
 
 function SellCar() {
   const [showForm, setShowForm] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [selectedNcd, setSelectedNcd] = useState('0');
   const [selectedInsuranceType, setSelectedInsuranceType] = useState('私家車');
   const [selectedFuelType, setSelectedFuelType] = useState('汽油車');
   const [showBrandSelector, setShowBrandSelector] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [carPhotos, setCarPhotos] = useState([]);
+  const [selectedColor, setSelectedColor] = useState('');
+  
+  // Map for car color names to their corresponding color values
+  const colorMap = {
+    '黑色 (Black)': '#000000',
+    '白色 (White)': '#FFFFFF',
+    '銀色 (Silver)': '#C0C0C0',
+    '灰色 (Grey)': '#808080',
+    '藍色 (Blue)': '#0000FF',
+    '紅色 (Red)': '#FF0000',
+    '棕色 (Brown)': '#8B4513',
+    '綠色 (Green)': '#008000',
+    '黃色 (Yellow)': '#FFFF00',
+    '橙色 (Orange)': '#FFA500',
+    '金色 (Gold)': '#FFD700',
+    '米色 (Beige)': '#F5F5DC',
+    '紫色 (Purple)': '#800080',
+    '多種 (Multiple)': '#555555',
+  };
+
+  // Get the SVG color based on the selected color
+  const svgColor = colorMap[selectedColor] || '#808080'; // Default to grey if no color is selected
+  
+  // Form data state
+  const [formData, setFormData] = useState({
+    ownerName: '',
+    whatsapp: '',
+    carBrand: '',
+    carModel: '',
+    trimLevel: '',
+    carYear: '',
+    mileage: '',
+    previousOwners: '',
+    color: '',
+    seats: '',
+    bodyType: '',
+    engineCapacity: '',
+    price: '',
+    fuelType: '',
+    transmission: ''
+  });
+  
+  // Photo upload ref
+  const fileInputRef = useRef(null);
   
   // 车辆品牌列表
   const carBrands = [
@@ -93,26 +139,87 @@ function SellCar() {
     brand.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
-  const handleNcdSelection = (value: string) => {
+  const handleNcdSelection = (value) => {
     setSelectedNcd(value);
+    setFormData({...formData, ncdMonths: value});
   };
   
-  const handleInsuranceTypeSelection = (type: string) => {
+  const handleInsuranceTypeSelection = (type) => {
     setSelectedInsuranceType(type);
+    setFormData({...formData, insuranceType: type});
   };
 
-  const handleFuelTypeSelection = (type: string) => {
+  const handleFuelTypeSelection = (type) => {
     setSelectedFuelType(type);
+    setFormData({...formData, vehicleFuelType: type});
   };
   
-  const handleBrandSelection = (brand: string) => {
+  const handleBrandSelection = (brand) => {
     setSelectedBrand(brand);
+    setFormData({...formData, carBrand: brand});
     setShowBrandSelector(false);
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({...formData, [name]: value});
+  };
+  
+  const handleColorSelection = (e) => {
+    const colorValue = e.target.value;
+    setSelectedColor(colorValue);
+    setFormData({...formData, color: colorValue});
+  };
+  
+  const handleSubmit = (e) => {
     e.preventDefault();
+    // Update form data with the current selected values
+    const updatedFormData = {
+      ...formData,
+      ncdMonths: selectedNcd,
+      insuranceType: selectedInsuranceType,
+      vehicleFuelType: selectedFuelType,
+      carBrand: selectedBrand,
+      color: selectedColor
+    };
+    setFormData(updatedFormData);
+    setShowPreview(true);
+    
+    // Ensure body scrolling is enabled for preview page
+    document.body.style.overflow = '';
+    
+    // Scroll to top when showing preview
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
+  const handleFinalSubmit = () => {
     alert('表單已成功提交！');
+    setShowPreview(false);
+    setShowForm(false);
+    setCarPhotos([]);
+    // Reset form
+    setFormData({
+      ownerName: '',
+      whatsapp: '',
+      carBrand: '',
+      carModel: '',
+      trimLevel: '',
+      carYear: '',
+      mileage: '',
+      previousOwners: '',
+      color: '',
+      seats: '',
+      bodyType: '',
+      engineCapacity: '',
+      price: '',
+      fuelType: '',
+      transmission: ''
+    });
+    setSelectedNcd('0');
+    setSelectedBrand('');
+    setSelectedColor('');
+    setSelectedInsuranceType('私家車');
+    setSelectedFuelType('汽油車');
   };
 
   // 点击车辆品牌输入框时显示品牌选择器
@@ -136,15 +243,54 @@ function SellCar() {
     document.body.style.overflow = '';
   };
 
-  // 确保组件卸载时恢复滚动
+  // Handle photo upload
+  const handlePhotoUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      const newPhotos = files.map(file => ({
+        file,
+        preview: URL.createObjectURL(file)
+      }));
+      setCarPhotos([...carPhotos, ...newPhotos]);
+    }
+  };
+
+  // Trigger file input click
+  const openFileDialog = () => {
+    fileInputRef.current.click();
+  };
+  
+  // Remove photo
+  const removePhoto = (index) => {
+    const newPhotos = [...carPhotos];
+    
+    // Revoke the object URL to avoid memory leaks
+    URL.revokeObjectURL(newPhotos[index].preview);
+    
+    newPhotos.splice(index, 1);
+    setCarPhotos(newPhotos);
+  };
+
+  // 确保组件卸载时恢复滚动和清理object URLs
   useEffect(() => {
     return () => {
       document.body.style.overflow = '';
+      // Clean up object URLs
+      carPhotos.forEach(photo => {
+        URL.revokeObjectURL(photo.preview);
+      });
     };
-  }, []);
+  }, [carPhotos]);
+
+  // Make sure scrolling is enabled when typing in form fields
+  useEffect(() => {
+    if (showForm && !showBrandSelector) {
+      document.body.style.overflow = '';
+    }
+  }, [showForm, showBrandSelector]);
 
   // 搜索输入框引用
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef();
 
   // 当品牌选择器显示时，自动聚焦到搜索输入框
   useEffect(() => {
@@ -156,12 +302,235 @@ function SellCar() {
   }, [showBrandSelector]);
 
   // Function to toggle form display
-  const handleCreateAdvert = (e: React.MouseEvent) => {
+  const handleCreateAdvert = (e) => {
     e.preventDefault();
     setShowForm(true);
     // Scroll to top when showing form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Preview Photo Gallery component
+  const PhotoGallery = () => (
+    <div className="mb-6">
+      <h4 className="text-lg font-bold mb-3">車輛照片</h4>
+      {carPhotos.length === 0 ? (
+        <div 
+          className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg mb-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
+          onClick={openFileDialog}
+        >
+          <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span className="mt-2 text-gray-600 font-medium">點擊上傳照片</span>
+          <span className="text-sm text-gray-500 mt-1">您可以上傳多張照片</span>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+            {carPhotos.map((photo, index) => (
+              <div key={index} className="relative group aspect-w-3 aspect-h-2">
+                <img 
+                  src={photo.preview} 
+                  alt={`Car photo ${index + 1}`}
+                  className="object-cover w-full h-full rounded-md"
+                />
+                <button
+                  type="button"
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => removePhoto(index)}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            
+            {/* Add more photos button */}
+            <div 
+              className="aspect-w-3 aspect-h-2 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
+              onClick={openFileDialog}
+            >
+              <div className="flex flex-col items-center">
+                <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                <span className="text-sm text-gray-600 mt-1">添加更多</span>
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            已上傳 {carPhotos.length} 張照片. 點擊 + 可添加更多照片.
+          </p>
+        </>
+      )}
+      
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handlePhotoUpload}
+        className="hidden"
+        accept="image/*"
+        multiple
+      />
+    </div>
+  );
+
+  // Preview component
+  const PreviewPage = () => (
+    <section className="bg-gray-100 py-8">
+      <div className="container mx-auto px-4 max-w-5xl">
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+          <div className="flex justify-between items-center p-6 border-b">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-800">預覽廣告</h2>
+              <p className="text-gray-600 mt-1">請檢查您的廣告信息是否正確</p>
+            </div>
+            <div className="w-48 h-24 relative">
+              {/* Car SVG */}
+              <svg viewBox="0 0 200 120" className="absolute">
+                <ellipse cx="100" cy="95" rx="80" ry="10" fill="#eee" opacity="0.5"/>
+                <path d="M160,70c0,0-10-20-20-20H60c-10,0-20,20-20,20l-10,15c0,0,0,10,10,10h120c10,0,10-10,10-10L160,70z" fill="#f9d71c"/>
+                <circle cx="55" cy="90" r="10" fill="#333"/>
+                <circle cx="55" cy="90" r="5" fill="#666"/>
+                <circle cx="145" cy="90" r="10" fill="#333"/>
+                <circle cx="145" cy="90" r="5" fill="#666"/>
+                <path d="M160,70H40c0,0,5-15,10-15h100C155,55,160,70,160,70z" fill="#f9d71c"/>
+                <rect x="70" y="60" width="60" height="15" fill="#333"/>
+              </svg>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {/* Photos section */}
+            <PhotoGallery />
+            
+            {/* Car preview card */}
+            <div className="bg-gray-50 rounded-lg p-6 mb-8 border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-2xl font-bold">{formData.carBrand || '車輛品牌'}</h3>
+                      <span className="text-xl font-bold text-blue-600">HK$ {formData.price || '-'}</span>
+                    </div>
+                    <p className="text-lg text-gray-700">{formData.carModel || '車輛型號'} {formData.trimLevel || ''}</p>
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>產年份:</span>
+                        <span className="font-medium">{formData.carYear || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>顏色:</span>
+                        <div className="flex items-center">
+                          {formData.color && (
+                            <svg className="w-4 h-4 mr-1" viewBox="0 0 24 24" 
+                                 fill={formData.color === '白色 (White)' ? 'none' : colorMap[formData.color]} 
+                                 stroke={formData.color === '白色 (White)' ? '#000000' : colorMap[formData.color]}
+                                 strokeWidth={formData.color === '白色 (White)' ? 2 : 0}>
+                              <rect x="4" y="4" width="16" height="16" rx="2" ry="2" fill={colorMap[formData.color]} />
+                            </svg>
+                          )}
+                          <span className="font-medium">{formData.color || '-'}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>里程數:</span>
+                        <span className="font-medium">{formData.mileage || '-'} 公里</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>座位数:</span>
+                        <span className="font-medium">{formData.seats || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+                    <h4 className="text-lg font-bold mb-3">車輛詳情</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>車輛類型:</span>
+                        <span className="font-medium">{formData.insuranceType || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>燃料類型:</span>
+                        <span className="font-medium">{formData.vehicleFuelType || '-'}</span>
+                      </div>
+                      {formData.vehicleFuelType === '汽油車' && (
+                        <>
+                          <div className="flex items-center justify-between text-gray-600">
+                            <span>引擎容量:</span>
+                            <span className="font-medium">{formData.engineCapacity || '-'} cc</span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-600">
+                            <span>燃料:</span>
+                            <span className="font-medium">{formData.fuelType || '-'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-gray-600">
+                            <span>傳動:</span>
+                            <span className="font-medium">{formData.transmission || '-'}</span>
+                          </div>
+                        </>
+                      )}
+                      {formData.vehicleFuelType === '電動車' && (
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>電池容量:</span>
+                          <span className="font-medium">{formData.engineCapacity || '-'} kW</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>前任車主數目:</span>
+                        <span className="font-medium">{formData.previousOwners || '0'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>牌費剩餘:</span>
+                        <span className="font-medium">{formData.ncdMonths === '無牌費' ? '無牌費' : `${formData.ncdMonths} 月`}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <h4 className="text-lg font-bold mb-3">聯絡人資料</h4>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>車主姓名:</span>
+                        <span className="font-medium">{formData.ownerName || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span>聯絡電話:</span>
+                        <span className="font-medium">{formData.whatsapp || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex gap-4">
+              <button 
+                type="button" 
+                onClick={() => setShowPreview(false)}
+                className="flex-1 bg-gray-300 text-gray-700 py-3 px-4 rounded-md hover:bg-gray-400 transition duration-200"
+              >
+                返回編輯
+              </button>
+              <button 
+                type="button" 
+                onClick={handleFinalSubmit}
+                className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-200"
+              >
+                確認發佈
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="min-h-screen flex flex-col font-noto-sans">
@@ -241,7 +610,10 @@ function SellCar() {
 
       {/* Main Content */}
       <main className="flex-1 bg-gray-100">
-        {showForm ? (
+        {showPreview ? (
+          // Preview Page
+          <PreviewPage />
+        ) : showForm ? (
           // Form Section - shows when showForm is true
           <section className="bg-gray-100 py-8">
             <div className="container mx-auto px-4 max-w-5xl">
@@ -292,6 +664,8 @@ function SellCar() {
                           name="ownerName" 
                           required 
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.ownerName}
+                          onChange={handleInputChange}
                         />
                       </div>
                       <div>
@@ -304,6 +678,8 @@ function SellCar() {
                           name="whatsapp" 
                           required 
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.whatsapp}
+                          onChange={handleInputChange}
                         />
                       </div>
                     </div>
@@ -381,8 +757,8 @@ function SellCar() {
                         >
                           <div className="flex items-center justify-center">
                             {type === '汽油車' ? (
-                              <svg className="w-5 h-5 mr-2" fill="#000000" height="20px" width="20px" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
-                              viewBox="0 0 512 512" xml:space="preserve">
+                              <svg className="w-5 h-5 mr-2" fill="#000000" height="20px" width="20px" version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" 
+                              viewBox="0 0 512 512" xmlSpace="preserve">
                            <g>
                              <g>
                                <circle cx="186.182" cy="116.364" r="11.636"/>
@@ -470,9 +846,14 @@ function SellCar() {
                             required 
                             className="w-full px-4 py-3 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                             disabled={!selectedBrand}
+                            value={formData.carModel}
+                            onChange={handleInputChange}
                           >
                             <option value="">選擇型號</option>
                             {/* 根据选择的品牌显示相应型号 */}
+                            <option value="模型A">模型A</option>
+                            <option value="模型B">模型B</option>
+                            <option value="模型C">模型C</option>
                           </select>
                           <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
                             <svg className="w-4 h-4 fill-current text-gray-500" viewBox="0 0 20 20">
@@ -491,6 +872,8 @@ function SellCar() {
                           name="trimLevel" 
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                           placeholder="例如: Sport, Luxury, SE..."
+                          value={formData.trimLevel}
+                          onChange={handleInputChange}
                         />
                       </div>
                     </div>
@@ -509,6 +892,8 @@ function SellCar() {
                           max="2025" 
                           required 
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.carYear}
+                          onChange={handleInputChange}
                         />
                       </div>
                       <div>
@@ -522,6 +907,8 @@ function SellCar() {
                           required 
                           placeholder="輸入公里數"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.mileage}
+                          onChange={handleInputChange}
                         />
                       </div>
                       <div>
@@ -535,6 +922,8 @@ function SellCar() {
                           min="0"
                           placeholder="輸入數目"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.previousOwners}
+                          onChange={handleInputChange}
                         />
                       </div>
                     </div>
@@ -542,30 +931,73 @@ function SellCar() {
                     {/* Car Details - third Row */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                       <div>
-                        <label htmlFor="carYear" className="block mb-2">
+                        <label htmlFor="color" className="block mb-2">
                           顏色 <span className="text-red-500">*</span>
                         </label>
-                        <input 
-                          type="text" 
-                          id="carYear" 
-                          name="carYear" 
-                          min="1900" 
-                          max="2025" 
-                          required 
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        <div className="relative">
+                          <select
+                            id="color"
+                            name="color"
+                            required
+                            value={selectedColor}
+                            onChange={handleColorSelection}
+                            className="w-full px-10 py-3 border border-gray-300 rounded-md appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">請選擇顏色</option>
+                            <option value="黑色 (Black)">黑色 (Black)</option>
+                            <option value="白色 (White)">白色 (White)</option>
+                            <option value="銀色 (Silver)">銀色 (Silver)</option>
+                            <option value="灰色 (Grey)">灰色 (Grey)</option>
+                            <option value="藍色 (Blue)">藍色 (Blue)</option>
+                            <option value="紅色 (Red)">紅色 (Red)</option>
+                            <option value="棕色 (Brown)">棕色 (Brown)</option>
+                            <option value="綠色 (Green)">綠色 (Green)</option>
+                            <option value="黃色 (Yellow)">黃色 (Yellow)</option>
+                            <option value="橙色 (Orange)">橙色 (Orange)</option>
+                            <option value="金色 (Gold)">金色 (Gold)</option>
+                            <option value="米色 (Beige)">米色 (Beige)</option>
+                            <option value="紫色 (Purple)">紫色 (Purple)</option>
+                            <option value="多種 (Multiple)">多種 (Multiple)</option>
+                          </select>
+                          <div className="absolute inset-y-0 left-0 flex items-center px-3 pointer-events-none">
+                            <svg
+                              className="w-5 h-5"
+                              viewBox="0 0 24 24"
+                              fill={selectedColor === '白色 (White)' ? 'none' : svgColor} 
+                              stroke={selectedColor === '白色 (White)' ? '#000000' : svgColor} 
+                              strokeWidth={selectedColor === '白色 (White)' ? 2 : 0}
+                            >
+                              <rect
+                                x="4"
+                                y="4"
+                                width="16"
+                                height="16"
+                                rx="2"
+                                ry="2"
+                                fill={svgColor}
+                              />
+                            </svg>
+                          </div>
+                          <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
+                            <svg className="w-4 h-4 fill-current text-gray-500" viewBox="0 0 20 20">
+                              <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                            </svg>
+                          </div>
+                        </div>
                       </div>
                       <div>
-                        <label htmlFor="mileage" className="block mb-2">
+                        <label htmlFor="seats" className="block mb-2">
                           座位 <span className="text-red-500">*</span>
                         </label>
                         <input 
                           type="number" 
-                          id="mileage" 
-                          name="mileage" 
+                          id="seats" 
+                          name="seats" 
                           required 
                           placeholder="輸入座位數"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.seats}
+                          onChange={handleInputChange}
                         />
                       </div>
                       <div>
@@ -599,6 +1031,8 @@ function SellCar() {
                             }
                             required
                             className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={formData.engineCapacity}
+                            onChange={handleInputChange}
                           />
                           <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
                             <svg className="w-4 h-4 fill-current text-gray-500" viewBox="0 0 20 20">
@@ -618,6 +1052,8 @@ function SellCar() {
                           placeholder="HK$ 輸入車值" 
                           required 
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.price}
+                          onChange={handleInputChange}
                         />
                       </div>
 
@@ -634,10 +1070,12 @@ function SellCar() {
                                 name="fuelType"
                                 required
                                 className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={formData.fuelType}
+                                onChange={handleInputChange}
                               >
                                 <option value="">選擇燃料</option>
-                                <option value="petroleum">Petroleum</option>
-                                <option value="diesel">Diesel</option>
+                                <option value="petroleum">電油</option>
+                                <option value="diesel">柴油</option>
                               </select>
                             </div>
 
@@ -651,6 +1089,8 @@ function SellCar() {
                                 name="transmission"
                                 required
                                 className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                value={formData.transmission}
+                                onChange={handleInputChange}
                               >
                                 <option value="">選擇傳動</option>
                                 <option value="manual">手動</option>
@@ -675,7 +1115,7 @@ function SellCar() {
                       type="submit" 
                       className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-200"
                     >
-                      提交報價
+                      預覽廣告
                     </button>
                   </div>
                 </form>
@@ -742,9 +1182,9 @@ function SellCar() {
 
         {/* FAQ Section */}
         <section className="container mx-auto px-4 py-12">
-          <h3 className="text-2xl font-bold text-center mb-8">{showForm ? '常見問題' : 'Your Questions Answered'}</h3>
+          <h3 className="text-2xl font-bold text-center mb-8">{showForm || showPreview ? '常見問題' : 'Your Questions Answered'}</h3>
           <div className="space-y-4">
-            {showForm ? (
+            {showForm || showPreview ? (
               // FAQ for the form
               <>
                 <details className="bg-white shadow-md rounded-lg p-4">
@@ -797,10 +1237,10 @@ function SellCar() {
       {/* Footer */}
       <footer className="bg-blue-900 text-white py-6">
         <div className="container mx-auto px-4 text-center">
-          <p>&copy; 2025 {showForm ? '車輛買賣服務' : 'AutoTrader'}. All rights reserved.</p>
+          <p>&copy; 2025 {showForm || showPreview ? '車輛買賣服務' : 'AutoTrader'}. All rights reserved.</p>
           <nav className="space-x-4 mt-4">
-            <a href="/privacy-policy" className="hover:underline">{showForm ? '隱私政策' : 'Privacy Policy'}</a>
-            <a href="/terms" className="hover:underline">{showForm ? '條款及細則' : 'Terms & Conditions'}</a>
+            <a href="/privacy-policy" className="hover:underline">{showForm || showPreview ? '隱私政策' : 'Privacy Policy'}</a>
+            <a href="/terms" className="hover:underline">{showForm || showPreview ? '條款及細則' : 'Terms & Conditions'}</a>
           </nav>
         </div>
       </footer>
