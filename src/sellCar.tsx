@@ -140,6 +140,11 @@ function SellCar() {
     brand.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
+  // Add a handler for car type selection
+  const handleCarTypeSelection = (carType) => {
+    setFormData({ ...formData, bodyType: carType });
+  };
+
   const handleNcdSelection = (value) => {
     setSelectedNcd(value);
     setFormData({...formData, ncdMonths: value});
@@ -407,94 +412,199 @@ function SellCar() {
   const PreviewPage = () => (
     <section className="bg-gray-100 py-8">
       <div className="container mx-auto px-4 max-w-5xl">
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="md:w-1/2">
+        {/* Use CSS Grid for layout */}
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 gap-6 grid-rows-[auto_auto_auto]"
+          style={{
+            gridTemplateRows: "auto auto auto", // Ensure three rows
+          }}
+        >
+          {/* Photo Upload - Occupies column 1, rows 1 and 2 */}
+          <div className="row-span-2">
             <PhotoGallery />
           </div>
-          <div className="md:w-1/2 flex flex-col gap-6">
+  
+          {/* Car Details - Occupies column 2, row 1 */}
+          <div className="row-span-1">
             <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
-              <h2 className="text-3xl md:text-4xl font-bold mb-2 text-gray-900">
-                {formData.carModel}
+              <h2 className="text-3xl md:text-3xl font-bold mb-2 text-gray-900">
+                {formData.carBrand} {formData.carModel}
               </h2>
               <div className="flex items-baseline gap-2 mb-4">
-                <p className="text-base md:text-lg text-gray-600">{formData.carBrand}</p>
-                <p className="text-base md:text-lg text-gray-600">{formData.trimLevel}</p>
+                <p className="text-base md:text-lg text-gray-600">
+                  {formData.trimLevel}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2 mb-2">
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">{formData.mileage}</span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">{formData.carYear}</span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">{formData.transmission}</span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">{formData.fuelType}</span>
+                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                  {formData.mileage} km
+                </span>
+                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                  {formData.carYear}
+                </span>
+                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                  {formData.transmission}
+                </span>
+                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                  {formData.fuelType}
+                </span>
               </div>
-              <p className="mt-6 text-3xl md:text-4xl font-bold text-blue-900 mb-4">
-                ${formData.price}
+              <p className="mt-6 text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+                ${new Intl.NumberFormat().format(formData.price || 0)}
               </p>
             </div>
-            {/* Personal Details Card */}
+          </div>
+  
+          {/* Personal Details - Occupies column 2, row 2 */}
+          <div className="row-span-1">
             <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-              <span className="inline-block bg-blue-600 text-white rounded px-2 py-1 text-sm mb-3">私人賣家</span>
+              <span className="inline-block bg-[#232c4f] text-white rounded px-2 py-1 text-sm mb-3">
+                私人賣家
+              </span>
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-2xl align-middle">👤</span>
-                <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">{formData.ownerName}</span>
+                <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">
+                  {formData.ownerName}
+                </span>
               </div>
               <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center text-blue-600 text-2xl h-7 w-7"><FiPhone /></span>
-                <span className="text-blue-700 font-medium text-base md:text-lg leading-tight">{formData.whatsapp}</span>
+                <span className="flex items-center justify-center text-[#232c4f] text-2xl h-7 w-7">
+                  <FiPhone />
+                </span>
+                <span className="text-[#232c4f] font-medium text-base md:text-lg leading-tight">
+                  {formData.whatsapp}
+                </span>
               </div>
+              <button
+                type="button"
+                className="w-full bg-[#232c4f] text-white py-2 px-4 rounded-md mt-4 hover:bg-[#1a223d] transition"
+                onClick={() => alert("Chat system coming soon!")}
+              >
+                Message
+              </button>
             </div>
-            {/* 詳細規格 Section */}
+          </div>
+  
+          {/* 詳細規格 - Occupies columns 1 and 2, row 3 */}
+          <div className="row-span-1 col-span-2">
             <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
               <div className="px-4 py-5 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">詳細規格</h3>
+                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                  詳細規格
+                </h3>
               </div>
-              <div className="border-t border-gray-200">
-                <dl className="divide-y divide-gray-200">
-                  <div className="bg-gray-50 px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">顏色</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.color}</dd>
+              <div className="border-t border-gray-200 px-4 py-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column */}
+                  <div className="pr-6 border-r border-gray-300">
+                    <dl className="space-y-4">
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          顏色
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.color || "灰色 (Grey)"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          座位數
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.seats || "2"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          車身類型
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.bodyType || "兩門車"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          生產年份
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.carYear || "2023"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          牌費資料
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.ncdMonths || "無牌費"}
+                        </dd>
+                      </div>
+                      
+                    </dl>
                   </div>
-                  <div className="bg-white px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">座位數</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.seats}</dd>
+                  {/* Right Column */}
+                  <div className="pl-6">
+                    <dl className="space-y-4">
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          引擎排氣量
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.engineCapacity || "3000"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          燃料類型
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.fuelType || "電油"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          傳動系統
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.transmission || "棍波"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          公里數
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.mileage || "10,000"}
+                        </dd>
+                      </div>
+                      <div className="flex">
+                        <dt className="text-sm font-medium text-gray-500 w-32">
+                          前任車主數目
+                        </dt>
+                        <dd className="text-sm text-gray-900">
+                          {formData.previousOwners || "1"}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
-                  <div className="bg-gray-50 px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">車身類型</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.bodyType}</dd>
-                  </div>
-                  <div className="bg-white px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">引擎排氣量</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.engineCapacity}</dd>
-                  </div>
-                  <div className="bg-gray-50 px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">售價</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">${formData.price}</dd>
-                  </div>
-                  <div className="bg-white px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">燃料類型</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.fuelType}</dd>
-                  </div>
-                  <div className="bg-gray-50 px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                    <dt className="text-sm font-medium text-gray-500">傳動系統</dt>
-                    <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{formData.transmission}</dd>
-                  </div>
-                </dl>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-4 mt-6">
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="bg-gray-300 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-400"
-              >
-                返回編輯
-              </button>
-              <button
-                type="button"
-                onClick={handleFinalSubmit}
-                className="bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700"
-              >
-                確認發佈
-              </button>
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-4 px-4 py-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(false)} // Go back to form
+                  className="bg-gray-300 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-400 transition"
+                >
+                  返回編輯
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinalSubmit} // Confirm submission
+                  className="bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition"
+                >
+                  確認發佈
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -980,7 +1090,7 @@ function SellCar() {
                           placeholder="輸入數目"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         /> */}
-                        <CarTypeDropdown />
+                        <CarTypeDropdown onSelect={handleCarTypeSelection} />
                       </div>
                     </div>
                     
@@ -1019,7 +1129,7 @@ function SellCar() {
                           name="price" 
                           placeholder="HK$ 輸入車值" 
                           required 
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-blue-900"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                           value={formData.price}
                           onChange={handleInputChange}
                         />
@@ -1042,8 +1152,8 @@ function SellCar() {
                                 onChange={handleInputChange}
                               >
                                 <option value="">選擇燃料</option>
-                                <option value="petroleum">電油</option>
-                                <option value="diesel">柴油</option>
+                                <option value="電油">電油</option>
+                                <option value="柴油">柴油</option>
                               </select>
                             </div>
 
@@ -1061,8 +1171,8 @@ function SellCar() {
                                 onChange={handleInputChange}
                               >
                                 <option value="">選擇傳動</option>
-                                <option value="manual">手動</option>
-                                <option value="automatic">自動</option>
+                                <option value="棍波">棍波</option>
+                                <option value="自動波">自動波</option>
                               </select>
                             </div>
                           </>

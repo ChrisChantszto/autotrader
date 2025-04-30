@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-function CarTypeDropdown() {
+function CarTypeDropdown({ onSelect }) {
   const [selectedItem, setSelectedItem] = useState("選擇車型");
 
   const items = [
@@ -16,6 +16,7 @@ function CarTypeDropdown() {
   const handleSelectChange = (e) => {
     const selectedName = e.target.value;
     setSelectedItem(selectedName);
+    onSelect(selectedName); // Pass the selected value to the parent component
   };
 
   return (

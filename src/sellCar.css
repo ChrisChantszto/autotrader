@@ -1,0 +1,15 @@
+[draggable] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  [draggable] img {
+    pointer-events: none;
+  }
+  
+  .dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
