@@ -319,287 +319,589 @@ function SellCar() {
   };
 
   // Preview Photo Gallery component
-  const PhotoGallery = () => {
-    const primaryIndex = carPhotos.findIndex(p => p.isPrimary);
-    const primary = carPhotos[primaryIndex];
-    const others = carPhotos.filter(p => !p.isPrimary);
-    return (
-      <div className="mb-6">
-        <h4 className="text-lg font-bold mb-3">車輛照片</h4>
-        {carPhotos.length === 0 && (
-          <div
-            className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg mb-4 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
-            onClick={openFileDialog}
-          >
-            <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="mt-2 text-gray-600 font-medium">點擊上傳照片</span>
-            <span className="text-sm text-gray-500 mt-1">您可以上傳多張照片</span>
-          </div>
-        )}
-        {carPhotos.length > 0 && (
-          <>
-            {/* 主照片 */}
-            <div className="mb-4">
-              <h5 className="text-md font-bold mb-2">主照片</h5>
-              <div className="relative aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg">
-                <img src={primary.preview} alt="Primary car photo" className="object-cover w-full h-full rounded-md" />
+  // In the SellCar component, add this improved PhotoGallery component for the form
+
+// Photo Upload functionality for the form
+const PhotoGallery = () => {
+  // Handle file upload including HEIC conversion
+  const handlePhotoUpload = async (e) => {
+    const fileList = e.target.files;
+    if (!fileList) return;
+    
+    const files = Array.from(fileList);
+    const newPhotos = [];
+    
+    for (const file of files) {
+      let preview;
+      let processedFile = file;
+      
+      // Check if file is HEIC format
+      if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+        try {
+          // Dynamically import heic2any only when needed
+          const heic2anyModule = await import('heic2any');
+          const heic2any = heic2anyModule.default;
+          
+          // Convert HEIC to JPEG blob
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+          });
+          
+          // Create a new file from the converted blob
+          processedFile = new File(
+            [convertedBlob], 
+            file.name.replace(/\.heic$/i, '.jpg'),
+            { type: 'image/jpeg' }
+          );
+          
+          preview = URL.createObjectURL(convertedBlob);
+        } catch (error) {
+          console.error('Error converting HEIC file:', error);
+          // Fallback to original file if conversion fails
+          preview = URL.createObjectURL(file);
+        }
+      } else {
+        preview = URL.createObjectURL(file);
+      }
+      
+      newPhotos.push({
+        file: processedFile,
+        preview,
+        isPrimary: false
+      });
+    }
+    
+    // Make first photo primary if no photos exist yet
+    if (carPhotos.length === 0 && newPhotos.length > 0) {
+      newPhotos[0].isPrimary = true;
+    }
+    
+    setCarPhotos(prev => [...prev, ...newPhotos]);
+  };
+
+  // Set a photo as primary
+  const setAsPrimary = (index) => {
+    const newPhotos = carPhotos.map((photo, i) => ({
+      ...photo,
+      isPrimary: i === index
+    }));
+    setCarPhotos(newPhotos);
+  };
+  
+  // Remove a photo
+  const removePhoto = (index) => {
+    const newPhotos = [...carPhotos];
+    // Revoke URL to prevent memory leaks
+    URL.revokeObjectURL(newPhotos[index].preview);
+    const wasRemovingPrimary = newPhotos[index].isPrimary;
+    
+    newPhotos.splice(index, 1);
+    
+    // If we removed the primary photo and there are still photos left,
+    // make the first one primary
+    if (wasRemovingPrimary && newPhotos.length > 0) {
+      newPhotos[0].isPrimary = true;
+    }
+    
+    setCarPhotos(newPhotos);
+  };
+
+  // Trigger file input
+  const openFileDialog = () => {
+    fileInputRef.current?.click();
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center mb-4">
+        <div className="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center mr-3 font-bold">4</div>
+        <h3 className="text-xl font-bold">車輛照片</h3>
+      </div>
+      
+      {carPhotos.length === 0 ? (
+        <div 
+          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={openFileDialog}
+        >
+          <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="mt-4 text-gray-600 font-medium">點擊上傳照片</p>
+          <p className="mt-2 text-sm text-gray-500">支持格式: JPG, PNG, HEIC</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Primary photo display */}
+          <div>
+            <h4 className="text-lg font-medium mb-2">主照片</h4>
+            {carPhotos.find(p => p.isPrimary) && (
+              <div className="relative">
+                <img 
+                  src={carPhotos.find(p => p.isPrimary).preview} 
+                  alt="Primary car photo"
+                  className="w-full h-64 object-cover rounded-lg"
+                />
                 <button
                   type="button"
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1"
-                  onClick={() => removePhoto(primaryIndex)}
+                  onClick={() => removePhoto(carPhotos.findIndex(p => p.isPrimary))}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
                 >
-                  &times;
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Other photos grid */}
+          <div>
+            <h4 className="text-lg font-medium mb-2">其他照片</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {carPhotos.filter(p => !p.isPrimary).map((photo, idx) => {
+                const realIndex = carPhotos.indexOf(photo);
+                return (
+                  <div key={realIndex} className="relative group">
+                    <img 
+                      src={photo.preview} 
+                      alt={`Car photo ${idx + 1}`}
+                      className="w-full h-32 object-cover rounded-lg"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 flex space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setAsPrimary(realIndex)}
+                          className="bg-blue-500 text-white rounded-full p-1"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(realIndex)}
+                          className="bg-red-500 text-white rounded-full p-1"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Add more photos button */}
+              <div 
+                onClick={openFileDialog}
+                className="border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center h-32 cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                <div className="text-center">
+                  <svg className="w-8 h-8 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span className="text-sm text-gray-500 mt-1 block">添加更多</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Photo count and advice */}
+          <p className="text-sm text-gray-500">
+            已上傳 {carPhotos.length} 張照片，上傳更多照片可增加廣告吸引力
+          </p>
+        </div>
+      )}
+      
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handlePhotoUpload}
+        accept="image/*, .heic"
+        multiple
+        className="hidden"
+      />
+    </div>
+  );
+};
+
+  // Preview page for reviewing before final submit
+const PreviewPage = () => {
+  // Find the primary photo
+  const primaryPhoto = carPhotos.find(photo => photo.isPrimary) || (carPhotos.length > 0 ? carPhotos[0] : null);
+  // Get secondary photos (all non-primary photos)
+  const secondaryPhotos = carPhotos.filter(photo => !photo.isPrimary);
+  
+  // Add a function to trigger photo upload in preview mode
+  const handlePreviewPhotoUpload = async (e) => {
+    const fileList = e.target.files;
+    if (!fileList) return;
+    
+    const files = Array.from(fileList);
+    const newPhotos = [];
+    
+    for (const file of files) {
+      let preview;
+      let processedFile = file;
+      
+      // Check if file is HEIC format
+      if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
+        try {
+          // Dynamically import heic2any only when needed
+          const heic2anyModule = await import('heic2any');
+          const heic2any = heic2anyModule.default;
+          
+          // Convert HEIC to JPEG blob
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+          });
+          
+          // Create a new file from the converted blob
+          processedFile = new File(
+            [convertedBlob], 
+            file.name.replace(/\.heic$/i, '.jpg'),
+            { type: 'image/jpeg' }
+          );
+          
+          preview = URL.createObjectURL(convertedBlob);
+        } catch (error) {
+          console.error('Error converting HEIC file:', error);
+          // Fallback to original file if conversion fails
+          preview = URL.createObjectURL(file);
+        }
+      } else {
+        preview = URL.createObjectURL(file);
+      }
+      
+      newPhotos.push({
+        file: processedFile,
+        preview,
+        isPrimary: false
+      });
+    }
+    
+    // Make first photo primary if no photos exist yet
+    if (carPhotos.length === 0 && newPhotos.length > 0) {
+      newPhotos[0].isPrimary = true;
+    }
+    
+    setCarPhotos(prev => [...prev, ...newPhotos]);
+  };
+  
+  // Function to delete a photo in preview
+  const deletePhoto = (index) => {
+    const newPhotos = [...carPhotos];
+    
+    // Revoke the object URL to prevent memory leaks
+    URL.revokeObjectURL(newPhotos[index].preview);
+    
+    const wasRemovingPrimary = newPhotos[index].isPrimary;
+    newPhotos.splice(index, 1);
+    
+    // If primary photo was removed and there are still photos left,
+    // make the first one primary
+    if (wasRemovingPrimary && newPhotos.length > 0) {
+      newPhotos[0].isPrimary = true;
+    }
+    
+    setCarPhotos(newPhotos);
+  };
+  
+  // Find index of primary photo
+  const primaryPhotoIndex = carPhotos.findIndex(photo => photo.isPrimary);
+  
+  return (
+    <section className="bg-gray-100 py-8">
+      <div className="container mx-auto px-4 max-w-6xl">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Left Column - Photos (takes 2/3 of space on desktop) */}
+          <div className="md:col-span-2">
+            <div className="mb-6">
+              <div className="bg-white p-4 rounded-lg shadow-md">
+                <h4 className="text-lg font-bold mb-3">車輛照片</h4>
+                {primaryPhoto ? (
+                  <>
+                    {/* Primary Photo */}
+                    <div className="mb-4">
+                      <div className="relative w-full h-[500px] bg-gray-100 rounded-lg overflow-hidden">
+                        <img
+                          src={primaryPhoto.preview}
+                          alt="Primary car photo"
+                          className="object-contain w-full h-full"
+                        />
+                        {/* Delete button for primary photo */}
+                        <button
+                          type="button"
+                          onClick={() => deletePhoto(primaryPhotoIndex)}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition shadow-md"
+                          aria-label="Delete photo"
+                        >
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Other Photos */}
+                    {secondaryPhotos.length > 0 && (
+                      <div>
+                        <h5 className="text-md font-medium mb-2">其他照片</h5>
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                          {secondaryPhotos.map((photo, idx) => {
+                            // Find the actual index in the carPhotos array
+                            const photoIndex = carPhotos.findIndex(p => p === photo);
+                            
+                            return (
+                              <div
+                                key={idx}
+                                className="relative flex-shrink-0 w-32 h-32 bg-gray-100 rounded-md overflow-hidden"
+                              >
+                                <img
+                                  src={photo.preview}
+                                  alt={`Car photo ${idx + 1}`}
+                                  className="object-cover w-full h-full"
+                                />
+                                {/* Delete button for secondary photo */}
+                                <button
+                                  type="button"
+                                  onClick={() => deletePhoto(photoIndex)}
+                                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition shadow-sm"
+                                  aria-label="Delete photo"
+                                >
+                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Add more photos button */}
+                    <div className="mt-4">
+                      <input
+                        type="file"
+                        onChange={handlePreviewPhotoUpload}
+                        accept="image/*, .heic"
+                        multiple
+                        className="hidden"
+                        id="preview-photo-upload"
+                      />
+                      <label
+                        htmlFor="preview-photo-upload"
+                        className="inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
+                      >
+                        添加更多照片
+                      </label>
+                      <p className="text-sm text-gray-500 mt-2">
+                        已上傳 {carPhotos.length} 張照片，主照片將顯示為廣告首圖
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg flex flex-col items-center justify-center py-12">
+                    <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <p className="mt-4 text-gray-500 text-center">未上傳照片</p>
+                    
+                    {/* Upload button when no photos exist */}
+                    <div className="mt-4">
+                      <input
+                        type="file"
+                        onChange={handlePreviewPhotoUpload}
+                        accept="image/*, .heic"
+                        multiple
+                        className="hidden"
+                        id="preview-photo-upload"
+                      />
+                      <label
+                        htmlFor="preview-photo-upload"
+                        className="inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
+                      >
+                        上傳照片
+                      </label>
+                    </div>
+                    
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowPreview(false)}
+                        className="text-blue-500 underline hover:text-blue-700"
+                      >
+                        返回表單上傳照片
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Info Boxes (takes 1/3 of space on desktop) */}
+          <div className="md:col-span-1">
+            {/* Car Details */}
+            <div className="mb-6">
+              <div className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-2xl md:text-3xl font-bold mb-2 text-gray-900">
+                  {formData.carBrand} {formData.carModel}
+                </h2>
+                {formData.trimLevel && (
+                  <div className="flex items-baseline gap-2 mb-4">
+                    <p className="text-base text-gray-600">
+                      {formData.trimLevel}
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {formData.mileage && (
+                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                      {formData.mileage} km
+                    </span>
+                  )}
+                  {formData.carYear && (
+                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                      {formData.carYear}
+                    </span>
+                  )}
+                  {formData.transmission && (
+                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                      {formData.transmission}
+                    </span>
+                  )}
+                  {formData.fuelType && (
+                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                      {formData.fuelType}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-4 text-3xl font-bold text-gray-900">
+                  ${formData.price ? new Intl.NumberFormat().format(formData.price) : "0"}
+                </p>
+              </div>
+            </div>
+
+            {/* Personal Details */}
+            <div className="mb-6">
+              <div className="bg-gray-50 p-6 rounded-lg shadow-md">
+                <span className="inline-block bg-[#232c4f] text-white rounded px-2 py-1 text-sm mb-3">
+                  私人賣家
+                </span>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-2xl align-middle">👤</span>
+                  <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">
+                    {formData.ownerName || "未提供姓名"}
+                  </span>
+                </div>
+                {formData.whatsapp && (
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="flex items-center justify-center text-[#232c4f] text-2xl h-7 w-7">
+                      <FiPhone />
+                    </span>
+                    <span className="text-[#232c4f] font-medium text-base md:text-lg leading-tight">
+                      {formData.whatsapp}
+                    </span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="w-full bg-[#232c4f] text-white py-2 px-4 rounded-md mt-3 hover:bg-[#1a223d] transition"
+                  onClick={() => alert("聯繫功能即將推出!")}
+                >
+                  聯繫賣家
                 </button>
               </div>
             </div>
-            {/* 其他照片 */}
-            <div>
-              <h5 className="text-md font-bold mb-2">其他照片</h5>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
-                {others.map(photo => {
-                  const realIndex = carPhotos.indexOf(photo);
-                  return (
-                    <div key={realIndex} className="relative group aspect-w-3 aspect-h-2">
-                      <img src={photo.preview} alt={`Car photo ${realIndex + 1}`} className="object-cover w-full h-full rounded-md" />
-                      <button
-                        type="button"
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => removePhoto(realIndex)}
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  );
-                })}
-                <div
-                  className="aspect-w-3 aspect-h-2 bg-gray-100 rounded-md flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
-                  onClick={openFileDialog}
-                >
-                  <div className="flex flex-col items-center">
-                    <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-1" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v3m0 0v3m0-3h3m-3 0H9" />
-                    </svg>
-                    <span className="text-sm text-gray-600 mt-1">添加更多</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-sm text-gray-500">
-              已上傳 {carPhotos.length} 張照片. 點擊 + 可添加更多照片.
-            </p>
-          </>
-        )}
-        {/* Hidden file input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handlePhotoUpload}
-          className="hidden"
-          accept="image/*"
-          multiple
-        />
-      </div>
-    );
-  };
+          </div>
 
-  // Preview page for reviewing before final submit
-  const PreviewPage = () => (
-    <section className="bg-gray-100 py-8">
-      <div className="container mx-auto px-4 max-w-5xl">
-        {/* Use CSS Grid for layout */}
-        <div
-          className="grid grid-cols-1 md:grid-cols-2 gap-6 grid-rows-[auto_auto_auto]"
-          style={{
-            gridTemplateRows: "auto auto auto", // Ensure three rows
-          }}
-        >
-          {/* Photo Upload - Occupies column 1, rows 1 and 2 */}
-          <div className="row-span-2">
-            <PhotoGallery />
-          </div>
-  
-          {/* Car Details - Occupies column 2, row 1 */}
-          <div className="row-span-1">
-            <div className="bg-white p-8 rounded-lg shadow-lg border border-gray-200">
-              <h2 className="text-3xl md:text-3xl font-bold mb-2 text-gray-900">
-                {formData.carBrand} {formData.carModel}
-              </h2>
-              <div className="flex items-baseline gap-2 mb-4">
-                <p className="text-base md:text-lg text-gray-600">
-                  {formData.trimLevel}
-                </p>
+          {/* Full Width - Specs */}
+          <div className="col-span-1 md:col-span-3">
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">詳細規格</h3>
               </div>
-              <div className="flex flex-wrap gap-2 mb-2">
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                  {formData.mileage} km
-                </span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                  {formData.carYear}
-                </span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                  {formData.transmission}
-                </span>
-                <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                  {formData.fuelType}
-                </span>
-              </div>
-              <p className="mt-6 text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-                ${new Intl.NumberFormat().format(formData.price || 0)}
-              </p>
-            </div>
-          </div>
-  
-          {/* Personal Details - Occupies column 2, row 2 */}
-          <div className="row-span-1">
-            <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-              <span className="inline-block bg-[#232c4f] text-white rounded px-2 py-1 text-sm mb-3">
-                私人賣家
-              </span>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-2xl align-middle">👤</span>
-                <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">
-                  {formData.ownerName}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 mb-3">
-                <span className="flex items-center justify-center text-[#232c4f] text-2xl h-7 w-7">
-                  <FiPhone />
-                </span>
-                <span className="text-[#232c4f] font-medium text-base md:text-lg leading-tight">
-                  {formData.whatsapp}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="w-full bg-[#232c4f] text-white py-2 px-4 rounded-md mt-4 hover:bg-[#1a223d] transition"
-                onClick={() => alert("Chat system coming soon!")}
-              >
-                Message
-              </button>
-            </div>
-          </div>
-  
-          {/* 詳細規格 - Occupies columns 1 and 2, row 3 */}
-          <div className="row-span-1 col-span-2">
-            <div className="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
-              <div className="px-4 py-5 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">
-                  詳細規格
-                </h3>
-              </div>
-              <div className="border-t border-gray-200 px-4 py-5">
+              <div className="px-6 py-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Left Column */}
-                  <div className="pr-6 border-r border-gray-300">
+                  <div className="pr-6 md:border-r border-gray-200">
                     <dl className="space-y-4">
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          顏色
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.color || "灰色 (Grey)"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">顏色</dt>
+                        <dd className="text-sm text-gray-900">{formData.color || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          座位數
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.seats || "2"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">座位數</dt>
+                        <dd className="text-sm text-gray-900">{formData.seats || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          車身類型
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.bodyType || "兩門車"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">車身類型</dt>
+                        <dd className="text-sm text-gray-900">{formData.bodyType || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          生產年份
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.carYear || "2023"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">生產年份</dt>
+                        <dd className="text-sm text-gray-900">{formData.carYear || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          牌費資料
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.ncdMonths || "無牌費"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">牌費資料（月份）</dt>
+                        <dd className="text-sm text-gray-900">{formData.ncdMonths || "-"}</dd>
                       </div>
-                      
                     </dl>
                   </div>
+                  
                   {/* Right Column */}
-                  <div className="pl-6">
+                  <div className="pl-0 md:pl-6">
                     <dl className="space-y-4">
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          引擎排氣量
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.engineCapacity || "3000"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">引擎排氣量</dt>
+                        <dd className="text-sm text-gray-900">{formData.engineCapacity ? `${formData.engineCapacity} cc` : "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          燃料類型
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.fuelType || "電油"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">燃料類型</dt>
+                        <dd className="text-sm text-gray-900">{formData.fuelType || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          傳動系統
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.transmission || "棍波"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">傳動系統</dt>
+                        <dd className="text-sm text-gray-900">{formData.transmission || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          公里數
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.mileage || "10,000"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">公里數</dt>
+                        <dd className="text-sm text-gray-900">{formData.mileage || "-"}</dd>
                       </div>
                       <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">
-                          前任車主數目
-                        </dt>
-                        <dd className="text-sm text-gray-900">
-                          {formData.previousOwners || "1"}
-                        </dd>
+                        <dt className="text-sm font-medium text-gray-500 w-32">前任車主數目</dt>
+                        <dd className="text-sm text-gray-900">{formData.previousOwners || "-"}</dd>
                       </div>
                     </dl>
                   </div>
                 </div>
               </div>
+              
               {/* Action Buttons */}
-              <div className="flex justify-end gap-4 px-4 py-4 border-t border-gray-200">
+              <div className="flex justify-end gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
                 <button
                   type="button"
-                  onClick={() => setShowPreview(false)} // Go back to form
+                  onClick={() => setShowPreview(false)}
                   className="bg-gray-300 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-400 transition"
                 >
                   返回編輯
                 </button>
                 <button
                   type="button"
-                  onClick={handleFinalSubmit} // Confirm submission
+                  onClick={handleFinalSubmit}
                   className="bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition"
                 >
                   確認發佈
@@ -611,6 +913,7 @@ function SellCar() {
       </div>
     </section>
   );
+};
 
   return (
     <div className="min-h-screen flex flex-col font-noto-sans">
