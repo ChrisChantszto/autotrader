@@ -3,6 +3,8 @@ import SellCarCarousel from './sellCarCarousel';
 import { motion, AnimatePresence } from 'framer-motion';
 import CarTypeDropdown from './carTypeDropDown';
 import { FiPhone } from 'react-icons/fi';
+import { IoPhonePortraitOutline } from "react-icons/io5";
+import { TbPacman } from "react-icons/tb";
 
 function SellCar() {
   const [showForm, setShowForm] = useState(false);
@@ -13,7 +15,16 @@ function SellCar() {
   const [showBrandSelector, setShowBrandSelector] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [carPhotos, setCarPhotos] = useState<{ file: File; preview: string; isPrimary: boolean }[]>([]);
+
+  type MediaItem = {
+    file: File;
+    preview: string;
+    isPrimary: boolean;
+    contentType: 'image' | 'video';
+    thumbnailUrl?: string; // For video thumbnails
+  }
+  
+  const [carPhotos, setCarPhotos] = useState<MediaItem[]>([]);
   const [selectedColor, setSelectedColor] = useState('');
   
   // Map for car color names to their corresponding color values
@@ -249,20 +260,122 @@ function SellCar() {
     document.body.style.overflow = '';
   };
 
-  // Handle photo upload
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Generate a video thumbnail
+  const generateVideoThumbnail = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      // Create a video element
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      
+      // Create an object URL for the video file
+      const videoUrl = URL.createObjectURL(file);
+      video.src = videoUrl;
+
+      // Once the video can play, seek to a point and capture a thumbnail
+      video.onloadeddata = () => {
+        // Seek to 1 second or the middle of the video, whichever is less
+        const seekTime = Math.min(1, video.duration / 2);
+        video.currentTime = seekTime;
+      };
+
+      // When seeking is complete, capture the thumbnail
+      video.onseeked = () => {
+        // Create a canvas and draw the video frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert the canvas to a data URL
+        const thumbnailUrl = canvas.toDataURL('image/jpeg');
+        
+        // Clean up resources
+        URL.revokeObjectURL(videoUrl);
+        
+        // Return the thumbnail URL
+        resolve(thumbnailUrl);
+      };
+
+      // Handle errors
+      video.onerror = () => {
+        URL.revokeObjectURL(videoUrl);
+        resolve(''); // Return empty string if thumbnail generation fails
+      };
+
+      // Start loading the video
+      video.load();
+    });
+  };
+
+  // Handle photo upload - FIXED VERSION
+  const handlePhotoUpload = async (e) => {
     const fileList = e.target.files;
     if (!fileList) return;
-    const files = Array.from(fileList) as File[];
-    if (files.length === 0) return;
-    const newPhotos = files.map(file => ({
-      file,
-      preview: URL.createObjectURL(file),
-      isPrimary: false
-    }));
-    // auto-assign primary if none exist
-    if (carPhotos.length === 0) newPhotos[0].isPrimary = true;
-    setCarPhotos(prev => [...prev, ...newPhotos]);
+    
+    const files = Array.from(fileList);
+    const newMedia = [];
+    
+    for (const file of files) {
+      let preview;
+      let processedFile = file;
+      // Check if file is a video type by MIME type
+      const isVideo = file.type.startsWith('video/');
+      let contentType: 'image' | 'video' = isVideo ? 'video' : 'image';
+      let thumbnailUrl = '';
+      
+      // Generate a thumbnail for videos
+      if (isVideo) {
+        thumbnailUrl = await generateVideoThumbnail(file);
+      }
+      
+      // Handle HEIC conversion for images
+      if (contentType === 'image' && (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic'))) {
+        try {
+          // Dynamically import heic2any only when needed
+          const heic2anyModule = await import('heic2any');
+          const heic2any = heic2anyModule.default;
+          
+          // Convert HEIC to JPEG blob
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+          });
+          
+          // Create a new file from the converted blob
+          processedFile = new File(
+            [convertedBlob], 
+            file.name.replace(/\.heic$/i, '.jpg'),
+            { type: 'image/jpeg' }
+          );
+          
+          preview = URL.createObjectURL(convertedBlob);
+        } catch (error) {
+          console.error('Error converting HEIC file:', error);
+          // Fallback to original file if conversion fails
+          preview = URL.createObjectURL(file);
+        }
+      } else {
+        preview = URL.createObjectURL(file);
+      }
+      
+      newMedia.push({
+        file: processedFile,
+        preview,
+        isPrimary: false,
+        contentType,
+        thumbnailUrl: isVideo ? thumbnailUrl : undefined
+      });
+    }
+    
+    // Make first item primary if no media exists yet
+    if (carPhotos.length === 0 && newMedia.length > 0) {
+      newMedia[0].isPrimary = true;
+    }
+    
+    setCarPhotos(prev => [...prev, ...newMedia]);
   };
 
   // Trigger file input click
@@ -318,602 +431,647 @@ function SellCar() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Preview Photo Gallery component
-  // In the SellCar component, add this improved PhotoGallery component for the form
+  // Keep track of playing video in the thumbnail view
+  const [playingVideoIndex, setPlayingVideoIndex] = useState<number | null>(null);
 
-// Photo Upload functionality for the form
-const PhotoGallery = () => {
-  // Handle file upload including HEIC conversion
-  const handlePhotoUpload = async (e) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
+  // Toggle video play in thumbnail view
+  const toggleVideoPlay = (index: number) => {
+    setPlayingVideoIndex(playingVideoIndex === index ? null : index);
+  };
+
+  // Photo Upload functionality for the form
+  const PhotoGallery = () => {
+    // Set a photo as primary
+    const setAsPrimary = (index) => {
+      const newPhotos = carPhotos.map((photo, i) => ({
+        ...photo,
+        isPrimary: i === index
+      }));
+      setCarPhotos(newPhotos);
+    };
     
-    const files = Array.from(fileList);
-    const newPhotos = [];
-    
-    for (const file of files) {
-      let preview;
-      let processedFile = file;
+    // Remove a photo
+    const removePhoto = (index) => {
+      const newPhotos = [...carPhotos];
+      // Revoke URL to prevent memory leaks
+      URL.revokeObjectURL(newPhotos[index].preview);
+      const wasRemovingPrimary = newPhotos[index].isPrimary;
       
-      // Check if file is HEIC format
-      if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
-        try {
-          // Dynamically import heic2any only when needed
-          const heic2anyModule = await import('heic2any');
-          const heic2any = heic2anyModule.default;
-          
-          // Convert HEIC to JPEG blob
-          const convertedBlob = await heic2any({
-            blob: file,
-            toType: 'image/jpeg',
-          });
-          
-          // Create a new file from the converted blob
-          processedFile = new File(
-            [convertedBlob], 
-            file.name.replace(/\.heic$/i, '.jpg'),
-            { type: 'image/jpeg' }
-          );
-          
-          preview = URL.createObjectURL(convertedBlob);
-        } catch (error) {
-          console.error('Error converting HEIC file:', error);
-          // Fallback to original file if conversion fails
-          preview = URL.createObjectURL(file);
-        }
-      } else {
-        preview = URL.createObjectURL(file);
+      newPhotos.splice(index, 1);
+      
+      // If we removed the primary photo and there are still photos left,
+      // make the first one primary
+      if (wasRemovingPrimary && newPhotos.length > 0) {
+        newPhotos[0].isPrimary = true;
       }
       
-      newPhotos.push({
-        file: processedFile,
-        preview,
-        isPrimary: false
-      });
-    }
-    
-    // Make first photo primary if no photos exist yet
-    if (carPhotos.length === 0 && newPhotos.length > 0) {
-      newPhotos[0].isPrimary = true;
-    }
-    
-    setCarPhotos(prev => [...prev, ...newPhotos]);
-  };
+      setCarPhotos(newPhotos);
+    };
 
-  // Set a photo as primary
-  const setAsPrimary = (index) => {
-    const newPhotos = carPhotos.map((photo, i) => ({
-      ...photo,
-      isPrimary: i === index
-    }));
-    setCarPhotos(newPhotos);
-  };
-  
-  // Remove a photo
-  const removePhoto = (index) => {
-    const newPhotos = [...carPhotos];
-    // Revoke URL to prevent memory leaks
-    URL.revokeObjectURL(newPhotos[index].preview);
-    const wasRemovingPrimary = newPhotos[index].isPrimary;
-    
-    newPhotos.splice(index, 1);
-    
-    // If we removed the primary photo and there are still photos left,
-    // make the first one primary
-    if (wasRemovingPrimary && newPhotos.length > 0) {
-      newPhotos[0].isPrimary = true;
-    }
-    
-    setCarPhotos(newPhotos);
-  };
+    // Trigger file input
+    const openFileDialog = () => {
+      fileInputRef.current?.click();
+    };
 
-  // Trigger file input
-  const openFileDialog = () => {
-    fileInputRef.current?.click();
-  };
-
-  return (
-    <div className="mb-8">
-      <div className="flex items-center mb-4">
-        <div className="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center mr-3 font-bold">4</div>
-        <h3 className="text-xl font-bold">車輛照片</h3>
-      </div>
-      
-      {carPhotos.length === 0 ? (
-        <div 
-          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition-colors"
-          onClick={openFileDialog}
-        >
-          <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <p className="mt-4 text-gray-600 font-medium">點擊上傳照片</p>
-          <p className="mt-2 text-sm text-gray-500">支持格式: JPG, PNG, HEIC</p>
+    return (
+      <div className="mb-8">
+        <div className="flex items-center mb-4">
+          <div className="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center mr-3 font-bold">4</div>
+          <h3 className="text-xl font-bold">車輛照片及影片</h3>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Primary photo display */}
-          <div>
-            <h4 className="text-lg font-medium mb-2">主照片</h4>
-            {carPhotos.find(p => p.isPrimary) && (
-              <div className="relative">
-                <img 
-                  src={carPhotos.find(p => p.isPrimary).preview} 
-                  alt="Primary car photo"
-                  className="w-full h-64 object-cover rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => removePhoto(carPhotos.findIndex(p => p.isPrimary))}
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
-                >
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            )}
+        
+        {carPhotos.length === 0 ? (
+          <div 
+            className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+            onClick={openFileDialog}
+          >
+            <svg className="w-16 h-16 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <p className="mt-4 text-gray-600 font-medium">點擊上傳照片或影片</p>
+            <p className="mt-2 text-sm text-gray-500">支持格式: JPG, PNG, HEIC, MP4, MOV</p>
           </div>
-          
-          {/* Other photos grid */}
-          <div>
-            <h4 className="text-lg font-medium mb-2">其他照片</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {carPhotos.filter(p => !p.isPrimary).map((photo, idx) => {
-                const realIndex = carPhotos.indexOf(photo);
-                return (
-                  <div key={realIndex} className="relative group">
+        ) : (
+          <div className="space-y-6">
+            {/* Primary media display */}
+            <div>
+              <h4 className="text-lg font-medium mb-2">主照片/影片</h4>
+              {carPhotos.find(p => p.isPrimary) && (
+                <div className="relative">
+                  {carPhotos.find(p => p.isPrimary).contentType === 'image' ? (
                     <img 
-                      src={photo.preview} 
-                      alt={`Car photo ${idx + 1}`}
-                      className="w-full h-32 object-cover rounded-lg"
+                      src={carPhotos.find(p => p.isPrimary).preview} 
+                      alt="Primary car photo"
+                      className="w-full h-64 object-cover rounded-lg"
                     />
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 flex space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => setAsPrimary(realIndex)}
-                          className="bg-blue-500 text-white rounded-full p-1"
-                        >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removePhoto(realIndex)}
-                          className="bg-red-500 text-white rounded-full p-1"
-                        >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Add more photos button */}
-              <div 
-                onClick={openFileDialog}
-                className="border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center h-32 cursor-pointer hover:bg-gray-50 transition-colors"
-              >
-                <div className="text-center">
-                  <svg className="w-8 h-8 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  <span className="text-sm text-gray-500 mt-1 block">添加更多</span>
+                  ) : (
+                    <video 
+                      src={carPhotos.find(p => p.isPrimary).preview}
+                      className="w-full h-64 object-cover rounded-lg"
+                      controls
+                      poster={carPhotos.find(p => p.isPrimary).thumbnailUrl}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(carPhotos.findIndex(p => p.isPrimary))}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-          
-          {/* Photo count and advice */}
-          <p className="text-sm text-gray-500">
-            已上傳 {carPhotos.length} 張照片，上傳更多照片可增加廣告吸引力
-          </p>
-        </div>
-      )}
-      
-      {/* Hidden file input */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handlePhotoUpload}
-        accept="image/*, .heic"
-        multiple
-        className="hidden"
-      />
-    </div>
-  );
-};
-
-  // Preview page for reviewing before final submit
-const PreviewPage = () => {
-  // Find the primary photo
-  const primaryPhoto = carPhotos.find(photo => photo.isPrimary) || (carPhotos.length > 0 ? carPhotos[0] : null);
-  // Get secondary photos (all non-primary photos)
-  const secondaryPhotos = carPhotos.filter(photo => !photo.isPrimary);
-  
-  // Add a function to trigger photo upload in preview mode
-  const handlePreviewPhotoUpload = async (e) => {
-    const fileList = e.target.files;
-    if (!fileList) return;
-    
-    const files = Array.from(fileList);
-    const newPhotos = [];
-    
-    for (const file of files) {
-      let preview;
-      let processedFile = file;
-      
-      // Check if file is HEIC format
-      if (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic')) {
-        try {
-          // Dynamically import heic2any only when needed
-          const heic2anyModule = await import('heic2any');
-          const heic2any = heic2anyModule.default;
-          
-          // Convert HEIC to JPEG blob
-          const convertedBlob = await heic2any({
-            blob: file,
-            toType: 'image/jpeg',
-          });
-          
-          // Create a new file from the converted blob
-          processedFile = new File(
-            [convertedBlob], 
-            file.name.replace(/\.heic$/i, '.jpg'),
-            { type: 'image/jpeg' }
-          );
-          
-          preview = URL.createObjectURL(convertedBlob);
-        } catch (error) {
-          console.error('Error converting HEIC file:', error);
-          // Fallback to original file if conversion fails
-          preview = URL.createObjectURL(file);
-        }
-      } else {
-        preview = URL.createObjectURL(file);
-      }
-      
-      newPhotos.push({
-        file: processedFile,
-        preview,
-        isPrimary: false
-      });
-    }
-    
-    // Make first photo primary if no photos exist yet
-    if (carPhotos.length === 0 && newPhotos.length > 0) {
-      newPhotos[0].isPrimary = true;
-    }
-    
-    setCarPhotos(prev => [...prev, ...newPhotos]);
-  };
-  
-  // Function to delete a photo in preview
-  const deletePhoto = (index) => {
-    const newPhotos = [...carPhotos];
-    
-    // Revoke the object URL to prevent memory leaks
-    URL.revokeObjectURL(newPhotos[index].preview);
-    
-    const wasRemovingPrimary = newPhotos[index].isPrimary;
-    newPhotos.splice(index, 1);
-    
-    // If primary photo was removed and there are still photos left,
-    // make the first one primary
-    if (wasRemovingPrimary && newPhotos.length > 0) {
-      newPhotos[0].isPrimary = true;
-    }
-    
-    setCarPhotos(newPhotos);
-  };
-  
-  // Find index of primary photo
-  const primaryPhotoIndex = carPhotos.findIndex(photo => photo.isPrimary);
-  
-  return (
-    <section className="bg-gray-100 py-8">
-      <div className="container mx-auto px-4 max-w-6xl">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left Column - Photos (takes 2/3 of space on desktop) */}
-          <div className="md:col-span-2">
-            <div className="mb-6">
-              <div className="bg-white p-4 rounded-lg shadow-md">
-                <h4 className="text-lg font-bold mb-3">車輛照片</h4>
-                {primaryPhoto ? (
-                  <>
-                    {/* Primary Photo */}
-                    <div className="mb-4">
-                      <div className="relative w-full h-[500px] bg-gray-100 rounded-lg overflow-hidden">
-                        <img
-                          src={primaryPhoto.preview}
-                          alt="Primary car photo"
-                          className="object-contain w-full h-full"
+            
+            {/* Other media grid */}
+            <div>
+              <h4 className="text-lg font-medium mb-2">其他照片/影片</h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {carPhotos.filter(p => !p.isPrimary).map((media, idx) => {
+                  const realIndex = carPhotos.indexOf(media);
+                  return (
+                    <div key={realIndex} className="relative group">
+                      {media.contentType === 'image' ? (
+                        <img 
+                          src={media.preview} 
+                          alt={`Car photo ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded-lg"
                         />
-                        {/* Delete button for primary photo */}
-                        <button
-                          type="button"
-                          onClick={() => deletePhoto(primaryPhotoIndex)}
-                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition shadow-md"
-                          aria-label="Delete photo"
+                      ) : (
+                        <div 
+                          className="relative w-full h-32 cursor-pointer"
+                          onClick={() => toggleVideoPlay(realIndex)}
                         >
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Other Photos */}
-                    {secondaryPhotos.length > 0 && (
-                      <div>
-                        <h5 className="text-md font-medium mb-2">其他照片</h5>
-                        <div className="flex gap-2 overflow-x-auto pb-2">
-                          {secondaryPhotos.map((photo, idx) => {
-                            // Find the actual index in the carPhotos array
-                            const photoIndex = carPhotos.findIndex(p => p === photo);
-                            
-                            return (
-                              <div
-                                key={idx}
-                                className="relative flex-shrink-0 w-32 h-32 bg-gray-100 rounded-md overflow-hidden"
-                              >
-                                <img
-                                  src={photo.preview}
-                                  alt={`Car photo ${idx + 1}`}
-                                  className="object-cover w-full h-full"
-                                />
-                                {/* Delete button for secondary photo */}
-                                <button
-                                  type="button"
-                                  onClick={() => deletePhoto(photoIndex)}
-                                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition shadow-sm"
-                                  aria-label="Delete photo"
-                                >
-                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
+                          {playingVideoIndex === realIndex ? (
+                            <video 
+                              src={media.preview} 
+                              className="w-full h-32 object-cover rounded-lg"
+                              autoPlay
+                              muted
+                              controls
+                              onEnded={() => setPlayingVideoIndex(null)}
+                            />
+                          ) : (
+                            <>
+                              <img 
+                                src={media.thumbnailUrl || '/default-video-thumbnail.jpg'} 
+                                alt={`Video thumbnail ${idx + 1}`}
+                                className="w-full h-32 object-cover rounded-lg"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                               </div>
-                            );
-                          })}
+                            </>
+                          )}
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-lg flex items-center justify-center">
+                        <div className="opacity-0 group-hover:opacity-100 flex space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => setAsPrimary(realIndex)}
+                            className="bg-blue-500 text-white rounded-full p-1"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(realIndex)}
+                            className="bg-red-500 text-white rounded-full p-1"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                    )}
-                    
-                    {/* Add more photos button */}
-                    <div className="mt-4">
-                      <input
-                        type="file"
-                        onChange={handlePreviewPhotoUpload}
-                        accept="image/*, .heic"
-                        multiple
-                        className="hidden"
-                        id="preview-photo-upload"
-                      />
-                      <label
-                        htmlFor="preview-photo-upload"
-                        className="inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
-                      >
-                        添加更多照片
-                      </label>
-                      <p className="text-sm text-gray-500 mt-2">
-                        已上傳 {carPhotos.length} 張照片，主照片將顯示為廣告首圖
+                    </div>
+                  );
+                })}
+                
+                {/* Add more media button */}
+                <div 
+                  onClick={openFileDialog}
+                  className="border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center h-32 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <div className="text-center">
+                    <svg className="w-8 h-8 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span className="text-sm text-gray-500 mt-1 block">添加更多</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Media count and advice */}
+            <p className="text-sm text-gray-500">
+              已上傳 {carPhotos.length} 個媒體文件，上傳更多內容可增加廣告吸引力
+            </p>
+          </div>
+        )}
+        
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handlePhotoUpload}
+          accept="image/*, video/mp4, video/quicktime, video/x-msvideo, .heic"
+          multiple
+          className="hidden"
+        />
+      </div>
+    );
+  };
+
+  // Preview page for reviewing before final submit
+  const PreviewPage = () => {
+    // Keep track of playing video in the thumbnail view
+    const [previewPlayingVideoIndex, setPreviewPlayingVideoIndex] = useState<number | null>(null);
+
+    // Toggle video play in thumbnail view
+    const togglePreviewVideoPlay = (index: number) => {
+      setPreviewPlayingVideoIndex(previewPlayingVideoIndex === index ? null : index);
+    };
+    
+    // Find the primary photo
+    const primaryPhoto = carPhotos.find(photo => photo.isPrimary) || (carPhotos.length > 0 ? carPhotos[0] : null);
+    // Get secondary photos (all non-primary photos)
+    const secondaryPhotos = carPhotos.filter(photo => !photo.isPrimary);
+    
+    // Add a function to trigger photo upload in preview mode
+    const handlePreviewPhotoUpload = async (e) => {
+      const fileList = e.target.files;
+      if (!fileList) return;
+      
+      const files = Array.from(fileList);
+      const newMedia = [];
+      
+      for (const file of files) {
+        let preview;
+        let processedFile = file;
+        
+        // Check if file is a video type by MIME type
+        const isVideo = file.type.startsWith('video/');
+        let contentType: 'image' | 'video' = isVideo ? 'video' : 'image';
+        let thumbnailUrl = '';
+        
+        // Generate a thumbnail for videos
+        if (isVideo) {
+          thumbnailUrl = await generateVideoThumbnail(file);
+        }
+        
+        // Handle HEIC conversion for images
+        if (contentType === 'image' && (file.type === 'image/heic' || file.name.toLowerCase().endsWith('.heic'))) {
+          try {
+            // Dynamically import heic2any only when needed
+            const heic2anyModule = await import('heic2any');
+            const heic2any = heic2anyModule.default;
+            
+            // Convert HEIC to JPEG blob
+            const convertedBlob = await heic2any({
+              blob: file,
+              toType: 'image/jpeg',
+            });
+            
+            // Create a new file from the converted blob
+            processedFile = new File(
+              [convertedBlob], 
+              file.name.replace(/\.heic$/i, '.jpg'),
+              { type: 'image/jpeg' }
+            );
+            
+            preview = URL.createObjectURL(convertedBlob);
+          } catch (error) {
+            console.error('Error converting HEIC file:', error);
+            // Fallback to original file if conversion fails
+            preview = URL.createObjectURL(file);
+          }
+        } else {
+          preview = URL.createObjectURL(file);
+        }
+        
+        newMedia.push({
+          file: processedFile,
+          preview,
+          isPrimary: false,
+          contentType,
+          thumbnailUrl: isVideo ? thumbnailUrl : undefined
+        });
+      }
+      
+      // Make first item primary if no media exists yet
+      if (carPhotos.length === 0 && newMedia.length > 0) {
+        newMedia[0].isPrimary = true;
+      }
+      
+      setCarPhotos(prev => [...prev, ...newMedia]);
+    };
+    
+    // Function to delete a photo in preview
+    const deletePhoto = (index) => {
+      const newPhotos = [...carPhotos];
+      
+      // Revoke the object URL to prevent memory leaks
+      URL.revokeObjectURL(newPhotos[index].preview);
+      
+      const wasRemovingPrimary = newPhotos[index].isPrimary;
+      newPhotos.splice(index, 1);
+      
+      // If primary photo was removed and there are still photos left,
+      // make the first one primary
+      if (wasRemovingPrimary && newPhotos.length > 0) {
+        newPhotos[0].isPrimary = true;
+      }
+      
+      setCarPhotos(newPhotos);
+    };
+    
+    // Find index of primary photo
+    const primaryPhotoIndex = carPhotos.findIndex(photo => photo.isPrimary);
+    
+    return (
+      <section className="bg-gray-100 py-8">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Left Column - Photos (takes 2/3 of space on desktop) */}
+            <div className="md:col-span-2">
+              <div className="mb-6">
+                <div className="bg-white p-4 rounded-lg shadow-md">
+                  <h4 className="text-lg font-bold mb-3">車輛照片及影片</h4>
+                  {primaryPhoto ? (
+                    <>
+                      {/* Primary Photo */}
+                      <div className="mb-4">
+                        <div className="relative w-full h-[500px] bg-white rounded-lg overflow-hidden">
+                          {primaryPhoto.contentType === 'image' ? (
+                            <img
+                              src={primaryPhoto.preview}
+                              alt="Primary car photo"
+                              className="object-contain w-full h-full"
+                            />
+                          ) : (
+                            <video
+                              src={primaryPhoto.preview}
+                              className="object-contain w-full h-full"
+                              controls
+                              autoPlay={false}
+                              poster={primaryPhoto.thumbnailUrl}
+                            />
+                          )}
+                          {/* Delete button for primary photo */}
+                          <button
+                            type="button"
+                            onClick={() => deletePhoto(primaryPhotoIndex)}
+                            className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition shadow-md"
+                            aria-label="Delete media"
+                          >
+                            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Other Photos */}
+                      {secondaryPhotos.length > 0 && (
+                        <div>
+                          <h5 className="text-md font-medium mb-2">其他照片及視頻</h5>
+                          <div className="flex gap-2 overflow-x-auto pb-2">
+                            {secondaryPhotos.map((media, idx) => {
+                              // Find the actual index in the carPhotos array
+                              const mediaIndex = carPhotos.findIndex(p => p === media);
+                              
+                              return (
+                                <div
+                                  key={idx}
+                                  className="relative flex-shrink-0 w-32 h-32 bg-white rounded-md overflow-hidden"
+                                >
+                                  {media.contentType === 'image' ? (
+                                    <img
+                                      src={media.preview}
+                                      alt={`Car photo ${idx + 1}`}
+                                      className="object-cover w-full h-full"
+                                    />
+                                  ) : (
+                                    <div 
+                                      className="relative w-full h-full cursor-pointer"
+                                      onClick={() => togglePreviewVideoPlay(mediaIndex)}
+                                    >
+                                      {previewPlayingVideoIndex === mediaIndex ? (
+                                        <video
+                                          src={media.preview}
+                                          className="object-cover w-full h-full"
+                                          autoPlay
+                                          muted
+                                          controls
+                                          onEnded={() => setPreviewPlayingVideoIndex(null)}
+                                        />
+                                      ) : (
+                                        <>
+                                          <img
+                                            src={media.thumbnailUrl || '/default-video-thumbnail.jpg'}
+                                            alt={`Video thumbnail ${idx + 1}`}
+                                            className="object-cover w-full h-full"
+                                          />
+                                          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40">
+                                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                          </div>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Delete button for secondary media */}
+                                  <button
+                                    type="button"
+                                    onClick={() => deletePhoto(mediaIndex)}
+                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition shadow-sm"
+                                    aria-label="Delete media"
+                                  >
+                                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Add more photos button */}
+                      <div className="mt-4">
+                        <input
+                          type="file"
+                          onChange={handlePreviewPhotoUpload}
+                          accept="image/*, video/mp4, video/quicktime, video/x-msvideo, .heic"
+                          multiple
+                          className="hidden"
+                          id="preview-photo-upload"
+                        />
+                        <label
+                          htmlFor="preview-photo-upload"
+                          className="inline-block bg-[#232c4f] text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
+                        >
+                          添加更多照片或影片
+                        </label>
+                        <p className="text-sm text-gray-500 mt-2">
+                          已上傳 {carPhotos.length} 個媒體文件，主要媒體將顯示為廣告首圖
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="aspect-w-16 aspect-h-9 bg-white rounded-lg flex flex-col items-center justify-center py-12">
+                      <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                        />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <p className="mt-4 text-gray-500 text-center">未上傳照片或影片</p>
+                      
+                      {/* Upload button when no photos exist */}
+                      <div className="mt-4">
+                        <input
+                          type="file"
+                          onChange={handlePreviewPhotoUpload}
+                          accept="image/*, video/mp4, video/quicktime, video/x-msvideo, .heic"
+                          multiple
+                          className="hidden"
+                          id="preview-photo-upload"
+                        />
+                        <label
+                          htmlFor="preview-photo-upload"
+                          className="inline-block bg-[#232c4f] text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
+                        >
+                          上傳照片或影片
+                        </label>
+                      </div>
+              
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column - Info Boxes (takes 1/3 of space on desktop) */}
+            <div className="md:col-span-1">
+              {/* Car Details */}
+              <div className="mb-6">
+                <div className="bg-white p-6 rounded-lg shadow-md">
+                  <h2 className="text-2xl md:text-3xl font-bold mb-2 text-gray-900">
+                    {formData.carBrand} {formData.carModel}
+                  </h2>
+                  {formData.trimLevel && (
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <p className="text-base text-gray-600">
+                        {formData.trimLevel}
                       </p>
                     </div>
-                  </>
-                ) : (
-                  <div className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg flex flex-col items-center justify-center py-12">
-                    <svg className="w-16 h-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                      />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <p className="mt-4 text-gray-500 text-center">未上傳照片</p>
-                    
-                    {/* Upload button when no photos exist */}
-                    <div className="mt-4">
-                      <input
-                        type="file"
-                        onChange={handlePreviewPhotoUpload}
-                        accept="image/*, .heic"
-                        multiple
-                        className="hidden"
-                        id="preview-photo-upload"
-                      />
-                      <label
-                        htmlFor="preview-photo-upload"
-                        className="inline-block bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition cursor-pointer"
-                      >
-                        上傳照片
-                      </label>
-                    </div>
-                    
-                    <div className="mt-3">
-                      <button
-                        onClick={() => setShowPreview(false)}
-                        className="text-blue-500 underline hover:text-blue-700"
-                      >
-                        返回表單上傳照片
-                      </button>
-                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {formData.mileage && (
+                      <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                        {formData.mileage} km
+                      </span>
+                    )}
+                    {formData.carYear && (
+                      <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                        {formData.carYear}
+                      </span>
+                    )}
+                    {formData.transmission && (
+                      <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                        {formData.transmission}
+                      </span>
+                    )}
+                    {formData.fuelType && (
+                      <span className="px-2 py-1 bg-gray-100 text-sm rounded">
+                        {formData.fuelType}
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column - Info Boxes (takes 1/3 of space on desktop) */}
-          <div className="md:col-span-1">
-            {/* Car Details */}
-            <div className="mb-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-2xl md:text-3xl font-bold mb-2 text-gray-900">
-                  {formData.carBrand} {formData.carModel}
-                </h2>
-                {formData.trimLevel && (
-                  <div className="flex items-baseline gap-2 mb-4">
-                    <p className="text-base text-gray-600">
-                      {formData.trimLevel}
-                    </p>
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {formData.mileage && (
-                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                      {formData.mileage} km
-                    </span>
-                  )}
-                  {formData.carYear && (
-                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                      {formData.carYear}
-                    </span>
-                  )}
-                  {formData.transmission && (
-                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                      {formData.transmission}
-                    </span>
-                  )}
-                  {formData.fuelType && (
-                    <span className="px-2 py-1 bg-gray-100 text-sm rounded">
-                      {formData.fuelType}
-                    </span>
-                  )}
+                  <p className="mt-4 text-3xl font-bold text-gray-900">
+                    ${formData.price ? new Intl.NumberFormat().format(formData.price) : "0"}
+                  </p>
                 </div>
-                <p className="mt-4 text-3xl font-bold text-gray-900">
-                  ${formData.price ? new Intl.NumberFormat().format(formData.price) : "0"}
-                </p>
               </div>
-            </div>
 
-            {/* Personal Details */}
-            <div className="mb-6">
-              <div className="bg-gray-50 p-6 rounded-lg shadow-md">
-                <span className="inline-block bg-[#232c4f] text-white rounded px-2 py-1 text-sm mb-3">
-                  私人賣家
-                </span>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-2xl align-middle">👤</span>
-                  <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">
-                    {formData.ownerName || "未提供姓名"}
+              {/* Personal Details */}
+              <div className="mb-6">
+                <div className="bg-gray-50 p-6 rounded-lg shadow-md">
+                  <span className="inline-block bg-[#232c4f] text-white rounded px-2 py-1 text-sm mb-3">
+                    私人賣家
                   </span>
-                </div>
-                {formData.whatsapp && (
                   <div className="flex items-center gap-3 mb-3">
                     <span className="flex items-center justify-center text-[#232c4f] text-2xl h-7 w-7">
-                      <FiPhone />
+                      <TbPacman />
+                      </span>
+                    <span className="font-medium text-gray-900 text-base md:text-lg leading-tight">
+                      {formData.ownerName || "未提供姓名"}
                     </span>
-                    <span className="text-[#232c4f] font-medium text-base md:text-lg leading-tight">
-                      {formData.whatsapp}
-                    </span>
                   </div>
-                )}
-                <button
-                  type="button"
-                  className="w-full bg-[#232c4f] text-white py-2 px-4 rounded-md mt-3 hover:bg-[#1a223d] transition"
-                  onClick={() => alert("聯繫功能即將推出!")}
-                >
-                  聯繫賣家
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Full Width - Specs */}
-          <div className="col-span-1 md:col-span-3">
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">詳細規格</h3>
-              </div>
-              <div className="px-6 py-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column */}
-                  <div className="pr-6 md:border-r border-gray-200">
-                    <dl className="space-y-4">
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">顏色</dt>
-                        <dd className="text-sm text-gray-900">{formData.color || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">座位數</dt>
-                        <dd className="text-sm text-gray-900">{formData.seats || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">車身類型</dt>
-                        <dd className="text-sm text-gray-900">{formData.bodyType || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">生產年份</dt>
-                        <dd className="text-sm text-gray-900">{formData.carYear || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">牌費資料（月份）</dt>
-                        <dd className="text-sm text-gray-900">{formData.ncdMonths || "-"}</dd>
-                      </div>
-                    </dl>
-                  </div>
-                  
-                  {/* Right Column */}
-                  <div className="pl-0 md:pl-6">
-                    <dl className="space-y-4">
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">引擎排氣量</dt>
-                        <dd className="text-sm text-gray-900">{formData.engineCapacity ? `${formData.engineCapacity} cc` : "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">燃料類型</dt>
-                        <dd className="text-sm text-gray-900">{formData.fuelType || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">傳動系統</dt>
-                        <dd className="text-sm text-gray-900">{formData.transmission || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">公里數</dt>
-                        <dd className="text-sm text-gray-900">{formData.mileage || "-"}</dd>
-                      </div>
-                      <div className="flex">
-                        <dt className="text-sm font-medium text-gray-500 w-32">前任車主數目</dt>
-                        <dd className="text-sm text-gray-900">{formData.previousOwners || "-"}</dd>
-                      </div>
-                    </dl>
-                  </div>
+                  {formData.whatsapp && (
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="flex items-center justify-center text-[#232c4f] text-2xl h-7 w-7">
+                        <IoPhonePortraitOutline />
+                      </span>
+                      <span className="text-[#232c4f] font-medium text-base md:text-lg leading-tight">
+                        {formData.whatsapp}
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="w-full bg-[#232c4f] text-white py-2 px-4 rounded-md mt-3 hover:bg-[#1a223d] transition"
+                    onClick={() => alert("聯繫功能即將推出!")}
+                  >
+                    聯繫賣家
+                  </button>
                 </div>
               </div>
-              
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(false)}
-                  className="bg-gray-300 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-400 transition"
-                >
-                  返回編輯
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFinalSubmit}
-                  className="bg-blue-600 text-white py-3 px-6 rounded-md hover:bg-blue-700 transition"
-                >
-                  確認發佈
-                </button>
+            </div>
+
+            {/* Full Width - Specs */}
+            <div className="col-span-1 md:col-span-3">
+              <div className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900">詳細規格</h3>
+                </div>
+                <div className="px-6 py-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Left Column */}
+                    <div className="pr-6 md:border-r border-gray-200">
+                      <dl className="space-y-4">
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">顏色</dt>
+                          <dd className="text-sm text-gray-900">{formData.color || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">座位數</dt>
+                          <dd className="text-sm text-gray-900">{formData.seats || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">車身類型</dt>
+                          <dd className="text-sm text-gray-900">{formData.bodyType || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">生產年份</dt>
+                          <dd className="text-sm text-gray-900">{formData.carYear || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">牌費資料（月份）</dt>
+                          <dd className="text-sm text-gray-900">{formData.ncdMonths || "-"}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                    
+                    {/* Right Column */}
+                    <div className="pl-0 md:pl-6">
+                      <dl className="space-y-4">
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">引擎排氣量</dt>
+                          <dd className="text-sm text-gray-900">{formData.engineCapacity ? `${formData.engineCapacity} cc` : "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">燃料類型</dt>
+                          <dd className="text-sm text-gray-900">{formData.fuelType || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">傳動系統</dt>
+                          <dd className="text-sm text-gray-900">{formData.transmission || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">公里數</dt>
+                          <dd className="text-sm text-gray-900">{formData.mileage || "-"}</dd>
+                        </div>
+                        <div className="flex">
+                          <dt className="text-sm font-medium text-gray-500 w-32">前任車主數目</dt>
+                          <dd className="text-sm text-gray-900">{formData.previousOwners || "-"}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-4 px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(false)}
+                    className="bg-gray-300 text-gray-700 py-3 px-6 rounded-md hover:bg-gray-400 transition"
+                  >
+                    返回編輯
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFinalSubmit}
+                    className="bg-[#232c4f] text-white py-3 px-6 rounded-md hover:bg-blue-700 transition"
+                  >
+                    確認發佈
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </section>
-  );
-};
+      </section>
+    );
+  };
 
   return (
     <div className="min-h-screen flex flex-col font-noto-sans">
@@ -1285,6 +1443,7 @@ const PreviewPage = () => {
                           type="number" 
                           id="mileage" 
                           name="mileage" 
+                          min="0"
                           required 
                           placeholder="輸入公里數"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1294,12 +1453,13 @@ const PreviewPage = () => {
                       </div>
                       <div>
                         <label htmlFor="previousOwners" className="block mb-2">
-                          前任車主數目
+                          前任車主數目 <span className="text-red-500">*</span>
                         </label>
                         <input 
                           type="number" 
                           id="previousOwners" 
                           name="previousOwners"
+                          required
                           min="0"
                           placeholder="輸入數目"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1374,6 +1534,7 @@ const PreviewPage = () => {
                           type="number" 
                           id="seats" 
                           name="seats" 
+                          min="1"
                           required 
                           placeholder="輸入座位數"
                           className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1382,17 +1543,6 @@ const PreviewPage = () => {
                         />
                       </div>
                       <div>
-                        {/* <label htmlFor="previousOwners" className="block mb-2">
-                          車身類型
-                        </label>
-                        <input 
-                          type="number" 
-                          id="previousOwners" 
-                          name="previousOwners"
-                          min="0"
-                          placeholder="輸入數目"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        /> */}
                         <CarTypeDropdown onSelect={handleCarTypeSelection} />
                       </div>
                     </div>
@@ -1494,7 +1644,7 @@ const PreviewPage = () => {
                     </button>
                     <button 
                       type="submit" 
-                      className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-200"
+                      className="flex-1 bg-[#232c4f] text-white py-3 px-4 rounded-md hover:bg-blue-700 transition duration-200"
                     >
                       預覽廣告
                     </button>
